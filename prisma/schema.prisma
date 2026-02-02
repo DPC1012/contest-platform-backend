@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User{
+  id Int @id @default(autoincrement())
+  name String
+  email String @unique
+  password String
+  role Role @default(contestee)
+  createdAt DateTime @default(now())
+
+  dsaSub DsaSubmission[]
+  mcqSub McqSubmission[]
+  contest Contest[]
+}
+enum Role{
+  creator
+  contestee
+}
+model Contest{
+  id Int @id @default(autoincrement())
+  title String
+  description String
+  creatorId Int
+  startTime DateTime 
+  endTime DateTime 
+  createdAt DateTime @default(now())
+
+  mcqQue McqQuestion[]
+  dsaProb DsaProblem[]
+  creator User @relation(fields: [creatorId], references: [id])
+}
+
+model McqQuestion{
+  id Int @id @default(autoincrement())
+  contestId Int
+  questionText String
+  options String[] @default([])
+  correctOptionIndex Int
+  points Int @default(1)
+  createdAt DateTime @default(now())
+  
+  mcqSub McqSubmission[]
+  contest Contest @relation(fields: [contestId], references: [id])
+}
+
+model DsaProblem{
+  id Int @id @default(autoincrement())
+  contestId Int
+  title String
+  description  String
+  tags  String[] @default([])
+  points Int @default(100)
+  timeLimit Int @default(2000)
+  memoryLimit Int @default(256)
+  createdAt DateTime @default(now())
+
+  dsaSub DsaSubmission[]
+  test TestCases[]
+  contest Contest @relation(fields: [contestId], references: [id])
+}
+
+model TestCases{
+  id Int @id @default(autoincrement())
+  problemId Int
+  input String
+  expectedOutput String
+  isHidden Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  dsaProb DsaProblem @relation(fields: [problemId], references: [id])
+}
+
+model McqSubmission{
+  id Int @id @default(autoincrement())
+  userId Int
+  questionId Int
+  selectedOptionIndex Int
+  isCorrect Boolean @default(false)
+  pointsEarned Int @default(0)
+  submittedAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+  mcqQue McqQuestion @relation(fields: [questionId], references: [id])
+}
+
+model DsaSubmission{
+  id Int @id @default(autoincrement())
+  userId Int
+  problemId Int 
+  code String
+  language String
+  status String
+  pointsEarned Int @default(0)
+  testCasesPassed Int @default(0)
+  totalTestCases Int @default(0)
+  executionTime Int @default(0)
+  submittedAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+  dsaProb DsaProblem @relation(fields: [problemId], references: [id])
+}
