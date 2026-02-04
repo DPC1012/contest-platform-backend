@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from "express"
 import { AuthCheck } from "../middleware/AuthMiddleware";
-import { ContestCreationSchema, ContestMcqSchema, ContestMcqSubSchema } from "../validation/ContestSchema";
+import { ContestCreationSchema, ContestDsaSchema, ContestMcqSchema, ContestMcqSubSchema } from "../validation/ContestSchema";
 import { VerifyRole } from "../middleware/RoleCheckMiddleware";
 import { prisma } from "../db/db";
 const ContestRouter = express.Router();
@@ -164,11 +164,6 @@ ContestRouter.post("/:contestId/mcq/:questionId/submit", AuthCheck, VerifyRole("
                 select:{
                     endTime: true,
                 }
-            },
-            mcqSub: {
-                select: {
-                    submittedAt: true,
-                }
             }
         }
     })
@@ -189,10 +184,98 @@ ContestRouter.post("/:contestId/mcq/:questionId/submit", AuthCheck, VerifyRole("
             error: "CONTEST_NOT_ACTIVE"
         })
     }
-    const isQueSubmitted = findMcq.mcqSub.filter((i) => {
-        return {
-            submittedAt: i.submittedAt,
+    const isQueSubmitted = await prisma.mcqSubmission.findFirst({
+        where: {
+            questionId: questionId,
+            userId: req.userId,
+            mcqQue: {
+                contestId: contestId,
+            }
         }
+    })
+    if(isQueSubmitted)
+    {
+        return res.status(400).json({
+            success: false,
+            data: null,
+            error: "ALREADY_SUBMITTED"
+        })
+    }
+    const isQueCorrect = findMcq.correctOptionIndex == data.selectedOptionIndex
+    const subMcq = await prisma.mcqSubmission.create({
+        data: {
+            userId: req.userId,
+            questionId: questionId,
+            selectedOptionIndex: data.selectedOptionIndex,
+            submittedAt: new Date(),
+            isCorrect: isQueCorrect ? true : false,
+            pointsEarned: isQueCorrect ? 1 : 0,
+        }
+    })
+    return res.status(201).json({
+        success,
+        data: {
+            isCorrect: subMcq.isCorrect,
+            pointsEarned: subMcq.pointsEarned
+        }
+    })
+})
+
+ContestRouter.post("/:contesId/dsa", AuthCheck, VerifyRole("creator"), async (req: Request, res: Response) => {
+    const contesId = Number(req.params.contesId);
+    const { success, data } = ContestDsaSchema.safeParse(req.body);
+    if( !success )
+    {
+        return res.status(400).json({
+            success: false,
+            data: null,
+            error: "INVALID_REQUEST"
+        })
+    }
+    const findContest = await prisma.contest.findUnique({
+        where: {
+            id: contesId
+        },
+    })
+    if(!findContest)
+    {
+        return res.status(404).json({
+            success: false,
+            data: null,
+            error: "CONTEST_NOT_FOUND"
+        })
+    }
+    const createDsaProb = await prisma.dsaProblem.create({
+        data: {
+            title: data.title,
+            description: data.description,
+            tags: data.tags,
+            points: data.points,
+            timeLimit: data.timeLimit,
+            memoryLimit: data.memoryLimit,
+            contestId: contesId,
+            createdAt: new Date()
+        },
+        include: {
+            test: true
+        }
+    })
+
+    const mapTestCases = createDsaProb.test.map((t) => {
+        return {
+            input: t.input,
+            expectedOutput: t.expectedOutput,
+            isHidden: t.isHidden
+        }
+    })
+
+    return res.status(201).json({
+        success,
+        data: {
+            id: createDsaProb.id,
+            contesId: contesId
+        },
+        error: null,
     })
 })
 export default ContestRouter;

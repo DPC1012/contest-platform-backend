@@ -6,4 +6,5 @@ app.use(express.json());
 
 app.use("/api/auth/", AuthRouter);
 app.use("/api/contests/", ContestRouter);
+app.use("/api/problems/", ContestRouter);
 app.listen(process.env.PORT);
